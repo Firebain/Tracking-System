@@ -1,6 +1,7 @@
 import zeep
 import cv2
 import os
+import logging
 
 from os import path
 from dotenv import load_dotenv
@@ -14,13 +15,19 @@ def zeep_pythonvalue(self, xmlvalue):
 
 zeep.xsd.simple.AnySimpleType.pythonvalue = zeep_pythonvalue
 
-# Getting path to rtsp stream 
+# Getting path to rtsp stream
+logging.info(u'Connecting to the camera')
+
 mycam = ONVIFCamera(
     host = os.getenv("CAMERA_HOST"), 
     port = os.getenv("CAMERA_PORT"), 
     user = os.getenv("CAMERA_USERNAME"), 
     passwd = os.getenv("CAMERA_PASSWORD")
 )
+
+logging.info(u'Connecting established successfully')
+
+logging.info(u'Finding the rtsp stream url')
 
 media_service = mycam.create_media_service()
 
@@ -32,25 +39,29 @@ url_info = media_service.GetStreamUri({'StreamSetup':{'Stream':'RTP-Unicast','Tr
 
 url = url_info.Uri
 
+logging.info('Connecting to rtsp by url {}'.format(url))
+
 # Initializing OpenCV and saving frames to directory
 cap = cv2.VideoCapture(url)
 
 dirname = path.join(path.dirname(path.realpath(__file__)), 'frames')
 
-count = 0
+# count = 0
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
     else:
         cv2.imshow('frame', frame)
-        name = "rec_frame"+str(count)+".jpg"
+        # name = "rec_frame"+str(count)+".jpg"
 
-        cv2.imwrite(path.join(dirname, name), frame)
+        # cv2.imwrite(path.join(dirname, name), frame)
 
-        count += 1
+        # count += 1
     if cv2.waitKey(20) & 0xFF == ord('q'):
         break
+
+logging.info('Program closed correctly')
 
 cap.release()
 cv2.destroyAllWindows()
