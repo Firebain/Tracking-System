@@ -1,11 +1,12 @@
 import zeep
-import cv2
 import os
 import logging
 
 from os import path
+from camera import CameraOnvifConnection, CameraRtspWindow
+from workers import FaceDetectionWorker
+from utils import Resources
 from dotenv import load_dotenv
-from onvif import ONVIFCamera, ONVIFService, ONVIFError
 
 load_dotenv()
 
@@ -15,62 +16,36 @@ def zeep_pythonvalue(self, xmlvalue):
 
 zeep.xsd.simple.AnySimpleType.pythonvalue = zeep_pythonvalue
 
-# Getting path to rtsp stream
-logging.info(u'Connecting to the camera')
 
-mycam = ONVIFCamera(
-    host = os.getenv("CAMERA_HOST"), 
-    port = os.getenv("CAMERA_PORT"), 
-    user = os.getenv("CAMERA_USERNAME"), 
-    passwd = os.getenv("CAMERA_PASSWORD")
-)
+def main():
+    logging.info('Connecting to camera')
 
-logging.info(u'Connecting established successfully')
+    camera = CameraOnvifConnection(
+        os.getenv("CAMERA_HOST"),
+        os.getenv("CAMERA_PORT"),
+        os.getenv("CAMERA_USERNAME"),
+        os.getenv("CAMERA_PASSWORD"),
+        Resources.wsdl_dir()
+    )
 
-logging.info(u'Finding the rtsp stream url')
+    logging.info('Connection established')
 
-media_service = mycam.create_media_service()
+    rtsp_url = camera.get_rtsp_url(profile_number=1)
 
-profiles = media_service.GetProfiles()
+    logging.info('Connecting to rtsp by url {}'.format(rtsp_url))
 
-token = profiles[1].token
+    worker = FaceDetectionWorker(
+        Resources.haarcascade('haarcascade_frontalface_default.xml')
+    )
 
-url_info = media_service.GetStreamUri({'StreamSetup':{'Stream':'RTP-Unicast','Transport':'UDP'},'ProfileToken':token})
+    window = CameraRtspWindow(rtsp_url)
 
-url = url_info.Uri
+    window.loop(worker)
 
-logging.info('Connecting to rtsp by url {}'.format(url))
+    window.destroy()
 
-# Initializing OpenCV and drawing a rectangle at face
-cap = cv2.VideoCapture(url)
+    logging.info('Program closed correctly')
 
-faceCascade = cv2.CascadeClassifier(path.join(path.dirname(path.realpath(__file__)), 'haarcascade_frontalface_default.xml'))
 
-dirname = path.join(path.dirname(path.realpath(__file__)), 'frames')
-
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    else:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        faces = faceCascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(30, 30),
-            flags=cv2.CASCADE_SCALE_IMAGE
-        )
-
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-
-        cv2.imshow('frame', frame)
-    if cv2.waitKey(20) & 0xFF == ord('q'):
-        break
-
-logging.info('Program closed correctly')
-
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == '__main__':
+    main()
