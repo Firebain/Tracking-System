@@ -5,7 +5,7 @@ import logging
 
 from os import path
 from dotenv import load_dotenv
-from onvif import ONVIFCamera, ONVIFService
+from onvif import ONVIFCamera, ONVIFService, ONVIFError
 
 load_dotenv()
 
@@ -41,23 +41,32 @@ url = url_info.Uri
 
 logging.info('Connecting to rtsp by url {}'.format(url))
 
-# Initializing OpenCV and saving frames to directory
+# Initializing OpenCV and drawing a rectangle at face
 cap = cv2.VideoCapture(url)
+
+faceCascade = cv2.CascadeClassifier(path.join(path.dirname(path.realpath(__file__)), 'haarcascade_frontalface_default.xml'))
 
 dirname = path.join(path.dirname(path.realpath(__file__)), 'frames')
 
-# count = 0
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
     else:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        faces = faceCascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30),
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
         cv2.imshow('frame', frame)
-        # name = "rec_frame"+str(count)+".jpg"
-
-        # cv2.imwrite(path.join(dirname, name), frame)
-
-        # count += 1
     if cv2.waitKey(20) & 0xFF == ord('q'):
         break
 
